@@ -1,0 +1,200 @@
+class AccessTokenValidator {
+
+
+  static Future<bool> isValidToken(
+      BuildContext context,
+      ) async {
+    try {
+      /// Creating instance of SharedPreferenceManager
+      SharedPreferencesManager? manager = await SharedPreferencesManager.getInstance();
+      ///Checking that refreshToken is present in local storage or not
+      if (manager!.getString(SharedPreferencesManager.refreshToken) != null) {
+        /// Now checking refreshToken is expired or not
+        var isRefreshTokenValid = DateTime.tryParse(manager.getString(SharedPreferencesManager.expiryTimeRefreshToken)!)!.isAfter(DateTime.now());
+        if (isRefreshTokenValid) {
+          /// Checking Access Token is present or not in local storage
+          if (manager.getString(SharedPreferencesManager.accessToken) != null) {
+            /// Now checking accessToken is expired or not
+            var isAccessTokenValid = DateTime.tryParse(
+                manager.getString(SharedPreferencesManager.expiryTimeAccessToken)!)!.isAfter(DateTime.now());
+            if (isAccessTokenValid) {
+              return true;
+            } else {
+              print("Refresh Token is called -------  ");
+              await refreshAccessToken(context);
+              return true;
+            }
+          }
+          return false;
+        } else {
+          await clearStorage(manager);
+          await showAlertDialog(
+            context,
+            title: 'Session Expired',
+            content: 'Please login again',
+            defaultActionText: "Ok",
+          );
+          Navigation.moveToLandingScreenAndRemoveAllTheRoutes(context);
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<void> clearStorage(SharedPreferencesManager manager) {
+    return Future.wait([
+      manager.clearKey(SharedPreferencesManager.accessToken),
+      manager.clearKey(SharedPreferencesManager.refreshToken),
+      manager.clearKey(SharedPreferencesManager.expiryTimeAccessToken),
+      manager.clearKey(SharedPreferencesManager.expiryTimeRefreshToken),
+      manager.clearKey(SharedPreferencesManager.name),
+      manager.clearKey(SharedPreferencesManager.userID),
+    ]
+    );
+  }
+
+  static Future<void> refreshAccessToken(BuildContext context) async {
+    Dio _dio = Dio();
+    String newAccessToken;
+    int newAccessTokenExpiryTime;
+    final manager = await SharedPreferencesManager.getInstance();
+print("Inside     refreshAccessToken ");
+    try {
+      Map<String, dynamic> data = {
+        "refreshToken": manager!.getString(SharedPreferencesManager.refreshToken)!
+      };
+
+      var response = await _dio.post(
+          API.refreshAccessToken,
+          data: json.encode(data)
+      );
+      if (response.statusCode == 200) {
+        newAccessToken = RefreshToken.fromJson(response.data).data.accessToken;
+        newAccessTokenExpiryTime = RefreshToken.fromJson(response.data).data.accessExpiry;
+
+        await manager.clearKey(SharedPreferencesManager.accessToken);
+        await manager.clearKey(SharedPreferencesManager.expiryTimeAccessToken);
+        final accessToken = newAccessToken;
+        final expiryTime = formattedDuration(
+          expiryDuration: newAccessTokenExpiryTime,
+        );
+        await manager.putString(
+          SharedPreferencesManager.accessToken,
+          accessToken,
+        );
+        await manager.putString(
+          SharedPreferencesManager.expiryTimeAccessToken,
+          expiryTime,
+        );
+      } else {
+        await manager.clearKey(SharedPreferencesManager.accessToken);
+        await manager.clearKey(SharedPreferencesManager.expiryTimeAccessToken);
+        await manager.clearKey(SharedPreferencesManager.refreshToken);
+      }
+    } on DioError catch (e) {
+      throw e;
+    }
+
+
+
+  }
+
+  // static String formattedDurationAccessToken({required int expiryDuration}) {
+  //   print("expiryDuration  formattedDuration ${expiryDuration}");
+  //
+  //   final currentDateTime = DateTime.now();
+  //   final expiryTime = currentDateTime.add(Duration(seconds: expiryDuration)).toString();
+  //   return expiryTime;
+  // }
+
+  static String formattedDuration({required int expiryDuration}) {
+    final currentDateTime = DateTime.now();
+    final expiryTime = currentDateTime.add(Duration(hours: expiryDuration)).toString();
+    return expiryTime;
+  }
+
+  static Future<void> saveUserCredentials({
+    required String accessToken,
+    required String secretAccessToken,
+    required String refreshToken,
+    required int accessTokenDuration,
+    required int refreshTokenDuration,
+    required String userID,
+    required String name,
+    required String country,
+    required String language,z
+  }) async {
+    final expiryTimeAccessToken = AccessTokenValidator.formattedDuration(expiryDuration: accessTokenDuration,);
+    final expiryTimeRefreshToken = AccessTokenValidator.formattedDuration(expiryDuration: refreshTokenDuration,);
+    SharedPreferencesManager? _manager = await SharedPreferencesManager.getInstance();
+    await Future.wait([
+      _manager!.putString(
+        SharedPreferencesManager.accessToken,
+        accessToken,
+      ),_manager.putString(
+        SharedPreferencesManager.secretAccessToken,
+        secretAccessToken,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.refreshToken,
+        refreshToken,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.expiryTimeAccessToken,
+        expiryTimeAccessToken,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.expiryTimeRefreshToken,
+        expiryTimeRefreshToken,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.name,
+        name,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.country,
+        country,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.userID,
+        userID,
+      ),
+      _manager.putString(
+        SharedPreferencesManager.language,
+        language,
+      ),
+    ]);
+  }
+
+  static Future<void> setUserPhoneNumber(phone) async {
+    final SharedPreferencesManager? _manager =
+    await SharedPreferencesManager.getInstance();
+    _manager!.putString('phone', phone);
+  }
+
+  static Future<void> setLastChatId(id) async {
+    final SharedPreferencesManager? _manager =
+    await SharedPreferencesManager.getInstance();
+    _manager!.putString('lastChatId', id);
+  }
+
+  static Future<void> setIsUserPostAllow(isPostAllow) async {
+    final SharedPreferencesManager? _manager =
+    await SharedPreferencesManager.getInstance();
+    _manager!.putString('isPostAllow', isPostAllow);
+  }
+
+  static Future<void> setIsNumberVerified(isverify) async {
+    final SharedPreferencesManager? _manager =
+    await SharedPreferencesManager.getInstance();
+    _manager!.putString('isverify', isverify);
+  }
+
+  static Future<String?> getUserEmailAddress() async {
+    final SharedPreferencesManager? _manager =
+    await SharedPreferencesManager.getInstance();
+    return _manager!.getString('email');
+  }
+}
